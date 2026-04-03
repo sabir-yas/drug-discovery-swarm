@@ -15,7 +15,8 @@ from rdkit.Chem.FilterCatalog import FilterCatalog, FilterCatalogParams
 class SafetyAgent:
     def __init__(self):
         self.agent_id = str(uuid.uuid4())[:8]
-        self.r = redis.Redis()
+        import os
+        self.r = redis.Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost:6379"))
         params = FilterCatalogParams()
         params.AddCatalog(FilterCatalogParams.FilterCatalogs.PAINS)
         self.pains_catalog = FilterCatalog(params)

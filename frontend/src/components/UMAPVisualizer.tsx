@@ -2,6 +2,7 @@ import React, { useMemo, useState, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
 import * as THREE from 'three';
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 
 interface Molecule {
   id: string;
@@ -25,7 +26,9 @@ interface Props {
 
 export function UMAPVisualizer({ molecules, onSelect }: Props) {
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
+  const [isHovering, setIsHovering] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const orbitRef = useRef<OrbitControlsImpl>(null);
 
   const { positions, colors } = useMemo(() => {
     const pos = new Float32Array(molecules.length * 3);
@@ -50,6 +53,7 @@ export function UMAPVisualizer({ molecules, onSelect }: Props) {
   const handlePointerOver = (e: any) => {
     e.stopPropagation();
     document.body.style.cursor = 'pointer';
+    setIsHovering(true);
     if (e.index !== undefined && molecules[e.index]) {
       const rect = containerRef.current?.getBoundingClientRect();
       const x = e.nativeEvent.clientX - (rect?.left ?? 0);
@@ -69,6 +73,7 @@ export function UMAPVisualizer({ molecules, onSelect }: Props) {
 
   const handlePointerOut = () => {
     document.body.style.cursor = 'default';
+    setIsHovering(false);
     setTooltip(null);
   };
 
@@ -99,12 +104,22 @@ export function UMAPVisualizer({ molecules, onSelect }: Props) {
         </div>
       )}
 
-      <Canvas camera={{ position: [0, 0, 50], fov: 60 }}>
-        <color attach="background" args={['#050508']} />
+      <Canvas
+        camera={{ position: [0, 0, 50], fov: 60 }}
+        raycaster={{ params: { Points: { threshold: 0.8 } } }}
+      >
+        <color attach="background" args={['#08080f']} />
         <ambientLight intensity={0.5} />
         <pointLight position={[10, 10, 10]} />
         <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
-        <OrbitControls enablePan enableZoom enableRotate autoRotate autoRotateSpeed={0.5} />
+        <OrbitControls
+          ref={orbitRef}
+          enablePan
+          enableZoom
+          enableRotate
+          autoRotate={!isHovering}
+          autoRotateSpeed={0.4}
+        />
 
         {molecules.length > 0 && (
           <points
@@ -118,10 +133,10 @@ export function UMAPVisualizer({ molecules, onSelect }: Props) {
               <bufferAttribute attach="attributes-color"    args={[colors, 3]} />
             </bufferGeometry>
             <pointsMaterial
-              size={0.6}
+              size={0.9}
               vertexColors
               transparent
-              opacity={0.8}
+              opacity={0.85}
               sizeAttenuation
             />
           </points>

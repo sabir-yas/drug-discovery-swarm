@@ -14,15 +14,36 @@ from config import MIN_HEAVY_ATOMS, MAX_HEAVY_ATOMS, MAX_MOLECULAR_WEIGHT
 import redis
 import json
 
-# Common SELFIES tokens for building molecules
-SELFIES_ALPHABET = sf.get_semantic_robust_alphabet()
-COMMON_TOKENS = list(SELFIES_ALPHABET)[:50]  # Use subset for speed
+# Restrict to drug-like atoms only: C, N, O, F, P, S, Cl, Br, I (+ H implicit)
+ALLOWED_ATOMIC_NUMS = {1, 6, 7, 8, 9, 15, 16, 17, 35, 53}
+
+def _build_drug_tokens() -> list:
+    """Filter SELFIES alphabet to tokens that only introduce drug-like atoms."""
+    tokens = []
+    for tok in sf.get_semantic_robust_alphabet():
+        try:
+            smi = sf.decoder(tok)
+            if not smi:
+                tokens.append(tok)  # structural token (Branch/Ring/epsilon) — keep
+                continue
+            mol = Chem.MolFromSmiles(smi)
+            if mol is None:
+                continue
+            atoms = {a.GetAtomicNum() for a in mol.GetAtoms()}
+            if atoms.issubset(ALLOWED_ATOMIC_NUMS):
+                tokens.append(tok)
+        except Exception:
+            tokens.append(tok)
+    return tokens or list(sf.get_semantic_robust_alphabet())[:50]
+
+COMMON_TOKENS = _build_drug_tokens()
 
 @ray.remote
 class ExplorerAgent:
     def __init__(self):
         self.agent_id = str(uuid.uuid4())[:8]
-        self.r = redis.Redis()
+        import os
+        self.r = redis.Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost:6379"))
 
     def _report_activity(self, node_id: str, activity: str, detail: str):
         """Report current activity to coordinator via Redis."""
@@ -164,6 +185,16 @@ class ExplorerAgent:
 
             mw = Descriptors.MolWt(mol)
             if mw > MAX_MOLECULAR_WEIGHT:
+                return None
+
+            # Reject exotic atoms (anything outside drug-like set)
+            atom_nums = {a.GetAtomicNum() for a in mol.GetAtoms()}
+            if not atom_nums.issubset(ALLOWED_ATOMIC_NUMS):
+                return None
+
+            # Reject formally charged molecules — they score well but aren't drug-like
+            total_charge = sum(a.GetFormalCharge() for a in mol.GetAtoms())
+            if total_charge != 0:
                 return None
 
             canonical_smiles = Chem.MolToSmiles(mol)

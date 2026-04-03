@@ -42,7 +42,9 @@ class SwarmCoordinator:
         ]
         self.selector = SelectorAgent.remote()
         
-        self.redis = redis.Redis()
+        import os
+        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+        self.redis = redis.Redis.from_url(redis_url)
         
         # Clear old events
         try:
@@ -217,9 +219,18 @@ class SwarmCoordinator:
                 m["generation"] = gen
 
             self.all_molecules.extend(population)
-            self.leaderboard = sorted(
-                self.all_molecules, key=lambda m: m["fitness"], reverse=True
-            )[:20]
+
+            # Deduplicate leaderboard by canonical SMILES so identical molecules
+            # don't fill all slots — keeps top-20 structurally unique
+            seen_smiles: set = set()
+            unique_lb = []
+            for m in sorted(self.all_molecules, key=lambda m: m["fitness"], reverse=True):
+                if m["smiles"] not in seen_smiles:
+                    seen_smiles.add(m["smiles"])
+                    unique_lb.append(m)
+                if len(unique_lb) >= 20:
+                    break
+            self.leaderboard = unique_lb
 
             elapsed = time.time() - start_time
 

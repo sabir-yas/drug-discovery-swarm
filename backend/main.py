@@ -75,8 +75,9 @@ async def get_status():
 
 @app.get("/api/molecule/{mol_id}")
 async def get_molecule_3d(mol_id: str):
-    """Return 3D conformer data for a specific molecule."""
-    return coordinator.get_molecule_3d(mol_id)
+    """Return 3D conformer data. Runs in a thread so it doesn't block the event loop."""
+    import asyncio
+    return await asyncio.to_thread(coordinator.get_molecule_3d, mol_id)
 
 
 @app.get("/api/leaderboard")

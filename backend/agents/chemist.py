@@ -15,7 +15,8 @@ import json
 class ChemistAgent:
     def __init__(self):
         self.agent_id = str(uuid.uuid4())[:8]
-        self.r = redis.Redis()
+        import os
+        self.r = redis.Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost:6379"))
 
     def _report_activity(self, node_id: str, activity: str, detail: str):
         self.r.setex(

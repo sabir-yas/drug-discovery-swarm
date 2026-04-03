@@ -38,6 +38,7 @@ export default function App() {
   });
   const [selectedSdf, setSelectedSdf] = useState<string | null>(null);
   const [selectedMolId, setSelectedMolId] = useState<string | null>(null);
+  const [loadingMol, setLoadingMol] = useState(false);
 
   const { sendMessage, lastMessage, readyState } = useWebSocket(WS_URL, {
     shouldReconnect: () => true,
@@ -77,17 +78,18 @@ export default function App() {
   }, [lastMessage]);
 
   const fetchMolecule3D = useCallback(async (molId: string) => {
+    if (loadingMol) return;
+    setLoadingMol(true);
+    setSelectedMolId(molId);
     try {
       const res = await fetch(`${API_URL}/molecule/${molId}`);
       if (res.ok) {
         const data = await res.json();
-        if (data?.sdf) {
-          setSelectedSdf(data.sdf);
-          setSelectedMolId(molId);
-        }
+        if (data?.sdf) setSelectedSdf(data.sdf);
       }
     } catch {}
-  }, []);
+    finally { setLoadingMol(false); }
+  }, [loadingMol]);
 
   const handleStart = () => {
     sendMessage(JSON.stringify({ action: 'start' }));
@@ -233,7 +235,7 @@ export default function App() {
 
           {/* 3D Conformer */}
           <div className="min-h-0 relative" style={{ background: '#09090f' }}>
-            <MoleculeViewer3D sdfData={selectedSdf} />
+            <MoleculeViewer3D sdfData={selectedSdf} loading={loadingMol} />
           </div>
 
           {/* Fitness Timeline */}

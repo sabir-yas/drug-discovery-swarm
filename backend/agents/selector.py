@@ -8,12 +8,15 @@ import ray
 import uuid
 import json
 import redis
+from rdkit import Chem
+from rdkit.Chem import AllChem, DataStructs
 
 @ray.remote
 class SelectorAgent:
     def __init__(self):
         self.agent_id = str(uuid.uuid4())[:8]
-        self.r = redis.Redis()
+        import os
+        self.r = redis.Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost:6379"))
 
     def _report_activity(self, node_id: str, activity: str, detail: str):
         self.r.setex(
@@ -51,8 +54,14 @@ class SelectorAgent:
         if not population:
             return []
 
-        # Sort by fitness
-        sorted_pop = sorted(population, key=lambda m: m["fitness"], reverse=True)
+        # Deduplicate by canonical SMILES — remove exact duplicates first
+        seen_smiles = set()
+        unique_pop = []
+        for m in sorted(population, key=lambda m: m["fitness"], reverse=True):
+            if m["smiles"] not in seen_smiles:
+                seen_smiles.add(m["smiles"])
+                unique_pop.append(m)
+        sorted_pop = unique_pop
 
         pop_size = len(sorted_pop)
         num_elite = max(1, int(pop_size * elite_fraction))
@@ -60,12 +69,39 @@ class SelectorAgent:
         # Elites pass through unchanged
         next_gen = sorted_pop[:num_elite]
 
-        # Tournament selection for remaining slots
+        # Precompute Morgan fingerprints for diversity scoring
+        fps = {}
+        for m in sorted_pop:
+            try:
+                mol = Chem.MolFromSmiles(m["smiles"])
+                if mol:
+                    fps[m["id"]] = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=1024)
+            except Exception:
+                pass
+
+        selected_fps = [fps[m["id"]] for m in next_gen if m["id"] in fps]
+
+        # Diversity-aware tournament selection for remaining slots
         remaining = pop_size - num_elite
         for _ in range(remaining):
             tournament = random.sample(sorted_pop, min(tournament_size, pop_size))
-            winner = max(tournament, key=lambda m: m["fitness"])
-            next_gen.append(winner)
+            best, best_score = None, -1.0
+            for candidate in tournament:
+                fp = fps.get(candidate["id"])
+                if fp and selected_fps:
+                    # Penalise molecules too similar to already-selected ones
+                    max_sim = max(DataStructs.TanimotoSimilarity(fp, sfp) for sfp in selected_fps)
+                    diversity_bonus = (1.0 - max_sim) * 0.15
+                else:
+                    diversity_bonus = 0.0
+                score = candidate["fitness"] + diversity_bonus
+                if score > best_score:
+                    best_score = score
+                    best = candidate
+            if best:
+                next_gen.append(best)
+                if best["id"] in fps:
+                    selected_fps.append(fps[best["id"]])
 
         # Emit events
         if next_gen:
