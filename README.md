@@ -13,15 +13,15 @@ A distributed multi-agent system that autonomously evolves novel drug candidate 
 ```
 Explorer Agents → Chemist Agents → Safety Agents → Selector Agent → next generation
      ↓                  ↓                ↓               ↓
- SELFIES mol       RDKit descriptor   PAINS + Lipinski  Tournament
- generation        binding proxy      toxicity filter   selection
+ SELFIES mol       RDKit heuristic   PAINS + Lipinski  Tournament
+ generation        or Vina docking   toxicity filter   selection
 ```
 
 Each generation:
 1. **Explorer** agents generate candidate molecules via SELFIES encoding + genetic operators (mutation, crossover)
-2. **Chemist** agents score binding affinity using RDKit molecular descriptors (logP, TPSA, H-bonds, rings)
+2. **Chemist** agents score binding affinity — fast RDKit heuristic by default, or real AutoDock Vina docking when enabled
 3. **Safety** agents filter out toxic/PAINS molecules and compute composite fitness
-4. **Selector** agent picks the fittest candidates for the next generation via elitism + tournament selection
+4. **Selector** agent picks the fittest candidates via elitism + tournament selection
 5. Results broadcast in real time over WebSocket to the React dashboard
 
 ---
@@ -39,7 +39,7 @@ Each generation:
 │         FastAPI + Uvicorn (Python)           │
 │              coordinator.py                  │
 │    Ray Actors ←→ Redis Streams/Keys          │
-│  [Explorer×10] [Chemist×8] [Safety×4] [Sel] │
+│  [Explorer×3] [Chemist×3] [Safety×2] [Sel]  │
 └─────────────────────────────────────────────┘
 ```
 
@@ -121,6 +121,47 @@ Open **http://localhost:5173** in your browser, then click **Launch Swarm**.
 
 ---
 
+## Real Docking with AutoDock Vina (optional)
+
+By default the swarm uses a fast RDKit heuristic to score molecules. For real binding affinities against the Mpro crystal structure, you can enable AutoDock Vina.
+
+### 1. Install docking dependencies
+```bash
+conda activate drugswarm
+conda install -c conda-forge openbabel meeko vina -y
+```
+
+### 2. Prepare the receptor (one-time)
+```bash
+cd backend
+python prepare_receptor.py
+```
+
+This downloads `6LU7.pdb` from RCSB, strips water/ligands, converts to PDBQT with Open Babel, and verifies the pipeline with a test molecule. The prepared receptor is saved to `backend/data/6LU7_prepared.pdbqt`.
+
+### 3. Enable docking in config
+```python
+# backend/config.py
+USE_REAL_DOCKING = True
+DOCKING_EXHAUSTIVENESS = 4   # 4 = fast/demo, 8 = production accuracy
+```
+
+Restart the backend. The Chemist agents will now call Vina for each molecule, falling back to heuristic scoring if docking fails for an individual candidate.
+
+### 4. Offline validation of top candidates
+After a swarm session, export the leaderboard and run full Vina validation:
+```bash
+# Export leaderboard (or use GET /api/leaderboard/export)
+curl http://localhost:8000/api/leaderboard/export
+
+# Dock top 10 swarm candidates vs. reference drugs (Nirmatrelvir, Ensitrelvir, GC376)
+python validate_with_vina.py --top-n 10 --exhaustiveness 8
+```
+
+Results are saved to `backend/vina_validation.json`.
+
+---
+
 ## Running on HPC (CU Boulder Alpine)
 
 ### One-time setup on login node
@@ -163,31 +204,29 @@ Open **http://localhost:5173**
 
 Edit `backend/config.py` to tune the swarm:
 
-| Parameter | Local (recommended) | HPC |
+| Parameter | Default | HPC |
 |---|---|---|
-| `NUM_EXPLORER_AGENTS` | 2 | 10 |
-| `NUM_CHEMIST_AGENTS` | 2 | 8 |
-| `NUM_SAFETY_AGENTS` | 1 | 4 |
-| `MOLECULES_PER_GENERATION` | 20 | 200 |
-| `MAX_GENERATIONS` | 10 | 50 |
+| `NUM_EXPLORER_AGENTS` | 3 | 10 |
+| `NUM_CHEMIST_AGENTS` | 3 | 8 |
+| `NUM_SAFETY_AGENTS` | 2 | 4 |
+| `MOLECULES_PER_GENERATION` | 50 | 200 |
+| `MAX_GENERATIONS` | 100 | 50 |
+| `USE_REAL_DOCKING` | `False` | `True` |
+| `DOCKING_EXHAUSTIVENESS` | 4 | 8 |
+
+The Redis URL defaults to `redis://localhost:6379` and can be overridden with the `REDIS_URL` environment variable.
 
 ---
 
-## Validating Results
+## API Endpoints
 
-Run the validation script while the backend is running:
-```bash
-cd backend
-conda activate drugswarm
-python validate_results.py
-```
-
-This checks your top candidates against:
-- **Lipinski's Rule of Five** — standard FDA oral drug-likeness filter
-- **PAINS screening** — removes false-positive assay interference compounds
-- **Tanimoto similarity** vs. Nirmatrelvir (Paxlovid) and Ensitrelvir — confirms candidates are novel
-
-For full ADMET profiling, paste the output SMILES into **https://www.swissadme.ch**
+| Method | Path | Description |
+|---|---|---|
+| `WS` | `/ws` | Real-time swarm data stream (start / pause / resume) |
+| `GET` | `/api/status` | Current swarm status |
+| `GET` | `/api/leaderboard` | Top molecules ranked by fitness |
+| `GET` | `/api/leaderboard/export` | Save leaderboard to `leaderboard.json` |
+| `GET` | `/api/molecule/{id}` | 3D conformer data for a molecule |
 
 ---
 
@@ -197,18 +236,22 @@ For full ADMET profiling, paste the output SMILES into **https://www.swissadme.c
 drug-discovery-swarm/
 ├── backend/
 │   ├── agents/
-│   │   ├── explorer.py      # SELFIES molecule generation + genetic operators
-│   │   ├── chemist.py       # RDKit binding affinity scoring
-│   │   ├── safety.py        # PAINS + Lipinski toxicity filtering
-│   │   └── selector.py      # Tournament + elitism selection
+│   │   ├── explorer.py          # SELFIES molecule generation + genetic operators
+│   │   ├── chemist.py           # RDKit heuristic or Vina docking scoring
+│   │   ├── safety.py            # PAINS + Lipinski toxicity filtering
+│   │   └── selector.py          # Tournament + elitism selection
 │   ├── chemistry/
-│   │   ├── fingerprints.py  # UMAP coordinate computation
-│   │   └── conformer.py     # 3D conformer generation (RDKit MMFF)
-│   ├── main.py              # FastAPI + WebSocket server
-│   ├── coordinator.py       # Swarm orchestrator (Ray + Redis)
-│   ├── config.py            # All hyperparameters
-│   ├── validate_results.py  # Result validation script
-│   ├── submit.sh            # SLURM HPC job script
+│   │   ├── fingerprints.py      # Morgan fingerprint + UMAP 3D coordinates
+│   │   ├── conformer.py         # 3D conformer generation (RDKit MMFF)
+│   │   └── docking.py           # AutoDock Vina wrapper (requires prepare_receptor.py)
+│   ├── data/                    # Created by prepare_receptor.py
+│   │   └── 6LU7_prepared.pdbqt  # Prepared Mpro receptor (gitignored)
+│   ├── main.py                  # FastAPI + WebSocket server
+│   ├── coordinator.py           # Swarm orchestrator (Ray + Redis)
+│   ├── config.py                # All hyperparameters
+│   ├── prepare_receptor.py      # One-time Mpro receptor preparation
+│   ├── validate_with_vina.py    # Offline Vina validation vs. reference drugs
+│   ├── submit.sh                # SLURM HPC job script
 │   └── requirements.txt
 └── frontend/
     ├── src/
@@ -227,9 +270,9 @@ drug-discovery-swarm/
 
 ## Known Limitations
 
-- **Binding score is a proxy** — uses RDKit descriptors, not real molecular docking. AutoDock Vina integration is stubbed (receptor file `6LU7_prepared.pdbqt` not included).
-- **Population convergence** — the swarm can converge to a single molecule by generation ~30. Reduce `MAX_GENERATIONS` or increase `MUTATION_RATE` in `config.py` to maintain diversity.
-- **No persistent storage** — molecules are in-memory only. Restart clears all results.
+- **Heuristic mode only approximates docking** — the default RDKit descriptor scorer is a proxy, not real binding affinity. Enable `USE_REAL_DOCKING` for Vina-based scores.
+- **Population convergence** — the swarm can converge to a single scaffold by generation ~30. Reduce `MAX_GENERATIONS` or increase `MUTATION_RATE` in `config.py` to maintain diversity.
+- **No persistent storage** — molecules are in-memory only. Restart clears all results (use `/api/leaderboard/export` to save before stopping).
 
 ---
 
@@ -239,6 +282,7 @@ drug-discovery-swarm/
 |---|---|
 | Molecule generation | SELFIES |
 | Cheminformatics | RDKit |
+| Molecular docking | AutoDock Vina + meeko + Open Babel |
 | Distributed agents | Ray |
 | Real-time messaging | Redis Streams |
 | API + WebSocket | FastAPI + Uvicorn |

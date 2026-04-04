@@ -38,8 +38,9 @@ def compute_umap_coordinates(molecules: list, n_components: int = 3) -> list:
     # Run UMAP to 3D
     reducer = UMAP(
         n_components=n_components,
-        n_neighbors=min(15, len(molecules) - 1),
-        min_dist=0.1,
+        n_neighbors=min(30, len(molecules) - 1),
+        min_dist=0.4,
+        spread=1.5,
         metric="jaccard",
         random_state=42,
     )

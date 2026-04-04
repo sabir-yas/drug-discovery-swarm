@@ -84,6 +84,17 @@ async def get_molecule_3d(mol_id: str):
 async def get_leaderboard():
     return coordinator.get_leaderboard()
 
+
+@app.get("/api/leaderboard/export")
+async def export_leaderboard():
+    """Save leaderboard to leaderboard.json for offline Vina validation."""
+    import json as _json
+    lb = coordinator.get_leaderboard()
+    path = "leaderboard.json"
+    with open(path, "w") as f:
+        _json.dump(lb, f, indent=2)
+    return {"saved": path, "count": len(lb)}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
