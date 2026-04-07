@@ -1,0 +1,65 @@
+{
+  "name": "Drug Target Matching Agent",
+  "version": "1.0.0",
+  "description": "An AI agent that reads FHIR R4 rare disease patient records, resolves the relevant mutated enzyme or protein target, runs a distributed evolutionary drug discovery swarm, and returns ranked small-molecule drug candidates as a FHIR MedicationRequest bundle. Powered by evolutionary AI — not a database lookup.",
+  "provider": {
+    "organization": "Drug Discovery Swarm",
+    "contact": "team@drug-discovery-swarm.ai"
+  },
+  "capabilities": {
+    "streaming": false,
+    "push_notifications": false,
+    "state_transition_history": true
+  },
+  "authentication": {
+    "schemes": ["bearer"]
+  },
+  "defaultInputModes": ["application/json"],
+  "defaultOutputModes": ["application/json"],
+  "skills": [
+    {
+      "id": "analyze_patient_and_discover",
+      "name": "Analyze Patient & Discover Drug Candidates",
+      "description": "Given a FHIR patient ID and SMART-on-FHIR access token, extract the patient's rare disease diagnosis and gene variants, resolve the relevant drug target using AI, run evolutionary molecule optimization against that target, and return ranked drug candidates with a FHIR MedicationRequest draft bundle.",
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"],
+      "tags": ["fhir", "drug-discovery", "rare-disease", "genomics", "a2a"],
+      "examples": [
+        {
+          "input": {
+            "task_id": "task-001",
+            "patient_context": {
+              "fhir_patient_id": "Patient/gaucher-demo-001",
+              "fhir_server_url": "mock",
+              "sharp_access_token": "mock"
+            },
+            "discovery_config": {
+              "max_generations": 20
+            }
+          },
+          "output": {
+            "run_id": "uuid",
+            "status": "accepted",
+            "poll_url": "/a2a/run/uuid"
+          }
+        }
+      ]
+    },
+    {
+      "id": "poll_discovery_run",
+      "name": "Poll Discovery Run Status",
+      "description": "Check the status of an ongoing molecule discovery run. Returns current generation, best fitness score, and resolved drug target.",
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"],
+      "tags": ["fhir", "drug-discovery", "status"]
+    },
+    {
+      "id": "get_discovery_results",
+      "name": "Get Discovery Results",
+      "description": "Retrieve the final ranked molecule candidates with clinical context for a completed discovery run. Includes a FHIR R4 MedicationRequest bundle (draft) with AI-generated drug candidates, binding scores, drug-likeness scores, and drug interaction notes.",
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"],
+      "tags": ["fhir", "drug-discovery", "results", "medication-request"]
+    }
+  ]
+}

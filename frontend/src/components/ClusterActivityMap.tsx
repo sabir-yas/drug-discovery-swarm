@@ -19,9 +19,9 @@ interface NodeActivity {
 }
 
 const AGENT_COLORS: Record<string, string> = {
-  ExplorerAgent: '#adc6ff',
-  ChemistAgent:  '#4edea3',
-  SafetyAgent:   '#fbbf24',
+  ExplorerAgent: '#00e3fd',
+  ChemistAgent:  '#a1ffc2',
+  SafetyAgent:   '#ffc563',
   SelectorAgent: '#c4b5fd',
 };
 
@@ -32,87 +32,81 @@ const AGENT_LABELS: Record<string, string> = {
   SelectorAgent: 'SEL',
 };
 
-interface Props {
-  nodes: NodeActivity[];
-}
-
-export function ClusterActivityMap({ nodes }: Props) {
+export function ClusterActivityMap({ nodes }: { nodes: NodeActivity[] }) {
   if (!nodes || nodes.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center text-xs tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.2)' }}>
-        Awaiting cluster telemetry...
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: 'rgba(12,14,18,0.7)', backdropFilter: 'blur(8px)', borderRadius: 10, border: '1px solid rgba(232,234,240,0.06)', width: 'fit-content' }}>
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgba(232,234,240,0.2)', display: 'inline-block' }} />
+        <span style={{ fontSize: 9, color: 'rgba(232,234,240,0.3)', letterSpacing: '0.15em', fontWeight: 600, textTransform: 'uppercase' }}>Awaiting cluster telemetry</span>
       </div>
     );
   }
 
   return (
-    <div className="flex gap-2 px-4 py-3 h-full overflow-x-auto">
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
       {nodes.map((node) => {
         const pct = Math.round(node.utilization * 100);
-        const barColor = node.utilization > 0.8 ? '#ef4444' : node.utilization > 0.5 ? '#fbbf24' : '#4edea3';
+        const barColor = node.utilization > 0.8 ? '#ef4444' : node.utilization > 0.5 ? '#ffc563' : '#a1ffc2';
 
         return (
           <motion.div
             key={node.node_id}
-            className="flex flex-col shrink-0 rounded-xl p-3 min-w-[160px]"
             style={{
-              background: 'rgba(255,255,255,0.03)',
-              border: `1px solid ${node.status === 'active' ? 'rgba(78,222,163,0.15)' : 'rgba(255,255,255,0.05)'}`,
-              backdropFilter: 'blur(8px)',
+              background: 'rgba(12,14,18,0.82)',
+              backdropFilter: 'blur(10px)',
+              border: `1px solid ${node.status === 'active' ? 'rgba(161,255,194,0.18)' : 'rgba(232,234,240,0.06)'}`,
+              borderRadius: 10,
+              padding: '8px 12px',
+              minWidth: 160,
             }}
             animate={{
-              boxShadow: node.utilization > 0.4
-                ? ['0 0 0px rgba(78,222,163,0)', '0 0 10px rgba(78,222,163,0.12)', '0 0 0px rgba(78,222,163,0)']
+              boxShadow: node.utilization > 0.3
+                ? ['0 0 0px rgba(161,255,194,0)', '0 0 12px rgba(161,255,194,0.1)', '0 0 0px rgba(161,255,194,0)']
                 : 'none',
             }}
             transition={{ repeat: Infinity, duration: 2.5 }}
           >
-            {/* Node header */}
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-mono font-medium truncate" style={{ color: '#e8e6f0' }}>
+            {/* Node name + status */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: 10, fontFamily: "'JetBrains Mono',monospace", color: '#e8eaf0', fontWeight: 600 }}>
                 {node.hostname}
               </span>
-              <span
-                className="text-[9px] px-1.5 py-0.5 rounded-full font-medium ml-1 shrink-0"
-                style={{
-                  background: node.status === 'active' ? 'rgba(78,222,163,0.12)' : 'rgba(255,255,255,0.05)',
-                  color:      node.status === 'active' ? '#4edea3' : 'rgba(255,255,255,0.3)',
-                }}
-              >
-                {node.status === 'active' ? '● LIVE' : '○ IDLE'}
+              <span style={{
+                fontSize: 8, padding: '1px 6px', borderRadius: 4, fontWeight: 700, letterSpacing: '0.08em',
+                background: node.status === 'active' ? 'rgba(161,255,194,0.12)' : 'rgba(232,234,240,0.05)',
+                color: node.status === 'active' ? '#a1ffc2' : 'rgba(232,234,240,0.25)',
+              }}>
+                {node.status === 'active' ? 'LIVE' : 'IDLE'}
               </span>
             </div>
 
             {/* CPU bar */}
-            <div className="h-1 w-full rounded-full mb-1 overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+            <div style={{ height: 2, background: 'rgba(232,234,240,0.07)', borderRadius: 2, marginBottom: 4, overflow: 'hidden' }}>
               <motion.div
-                className="h-full rounded-full"
-                style={{ background: barColor }}
+                style={{ height: '100%', borderRadius: 2, background: barColor }}
                 animate={{ width: `${pct}%` }}
                 transition={{ duration: 0.6, ease: 'easeOut' }}
               />
             </div>
-            <div className="text-[10px] mb-2.5 font-mono" style={{ color: 'rgba(255,255,255,0.3)' }}>
-              {pct}% CPU · {node.cpu_used}/{node.cpu_total} cores
+            <div style={{ fontSize: 9, color: 'rgba(232,234,240,0.3)', fontFamily: "'JetBrains Mono',monospace", marginBottom: 6 }}>
+              {pct}% · {node.cpu_used}/{node.cpu_total} cores
             </div>
 
             {/* Agent tags */}
-            <div className="flex flex-wrap gap-1">
-              {node.agents.slice(0, 4).map((agent) => (
-                <span
-                  key={agent.agent_id}
-                  className="text-[9px] font-mono px-1.5 py-0.5 rounded"
-                  style={{
-                    background: `${AGENT_COLORS[agent.agent_type] ?? '#fff'}18`,
-                    color:       AGENT_COLORS[agent.agent_type] ?? 'rgba(255,255,255,0.4)',
-                    border:     `1px solid ${AGENT_COLORS[agent.agent_type] ?? '#fff'}30`,
-                  }}
-                >
-                  {AGENT_LABELS[agent.agent_type] ?? 'AGT'}
-                </span>
-              ))}
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {node.agents.slice(0, 4).map((agent) => {
+                const c = AGENT_COLORS[agent.agent_type] ?? '#888';
+                return (
+                  <span key={agent.agent_id} style={{
+                    fontSize: 8, padding: '1px 5px', borderRadius: 3, fontFamily: "'JetBrains Mono',monospace", fontWeight: 700,
+                    background: `${c}18`, color: c, border: `1px solid ${c}28`,
+                  }}>
+                    {AGENT_LABELS[agent.agent_type] ?? 'AGT'}
+                  </span>
+                );
+              })}
               {node.agents.length === 0 && (
-                <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.2)' }}>No active agents</span>
+                <span style={{ fontSize: 9, color: 'rgba(232,234,240,0.2)' }}>idle</span>
               )}
             </div>
           </motion.div>

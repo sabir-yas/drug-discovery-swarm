@@ -26,8 +26,8 @@ TOXICITY_PENALTY_WEIGHT = 0.2
 # Docking
 # Set True after running: python prepare_receptor.py
 # Requires: conda install -c conda-forge openbabel meeko -y
-USE_REAL_DOCKING = False
-DOCKING_EXHAUSTIVENESS = 4   # 4=fast/demo, 8=production accuracy
+USE_REAL_DOCKING = True
+DOCKING_EXHAUSTIVENESS = 8   # 4=fast/demo, 8=production accuracy
 
 # Server
 WEBSOCKET_BROADCAST_INTERVAL = 0.5  # seconds

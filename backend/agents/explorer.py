@@ -18,22 +18,38 @@ import json
 ALLOWED_ATOMIC_NUMS = {1, 6, 7, 8, 9, 15, 16, 17, 35, 53}
 
 def _build_drug_tokens() -> list:
-    """Filter SELFIES alphabet to tokens that only introduce drug-like atoms."""
+    """
+    Filter SELFIES alphabet to tokens that only introduce drug-like, neutral atoms.
+    Excludes any token that produces formal charges, radicals, or non-drug atoms.
+    This ensures generated molecules are dockable by Vina/meeko.
+    """
     tokens = []
     for tok in sf.get_semantic_robust_alphabet():
+        # Keep structural tokens (Branch, Ring, epsilon) — they have no SMILES
+        if not any(c.isalpha() or c in '[]' for c in tok.replace('[', '').replace(']', '')):
+            tokens.append(tok)
+            continue
         try:
             smi = sf.decoder(tok)
             if not smi:
-                tokens.append(tok)  # structural token (Branch/Ring/epsilon) — keep
+                tokens.append(tok)  # structural token — keep
                 continue
             mol = Chem.MolFromSmiles(smi)
             if mol is None:
                 continue
+            # Reject non-drug atoms
             atoms = {a.GetAtomicNum() for a in mol.GetAtoms()}
-            if atoms.issubset(ALLOWED_ATOMIC_NUMS):
-                tokens.append(tok)
-        except Exception:
+            if not atoms.issubset(ALLOWED_ATOMIC_NUMS):
+                continue
+            # Reject any formal charge
+            if any(a.GetFormalCharge() != 0 for a in mol.GetAtoms()):
+                continue
+            # Reject radicals
+            if any(a.GetNumRadicalElectrons() != 0 for a in mol.GetAtoms()):
+                continue
             tokens.append(tok)
+        except Exception:
+            continue  # skip unknown tokens rather than keeping them
     return tokens or list(sf.get_semantic_robust_alphabet())[:50]
 
 COMMON_TOKENS = _build_drug_tokens()
@@ -98,8 +114,14 @@ class ExplorerAgent:
         count: int,
         mutation_rate: float,
         crossover_rate: float,
+        elite_seed_ids: list = None,
     ) -> list:
-        """Generate molecules by mutating/crossing over the current population."""
+        """Generate molecules by mutating/crossing over the current population.
+
+        elite_seed_ids: list of molecule IDs to bias crossover toward — these
+        are crossed with random partners at 2x the normal rate to preserve
+        promising scaffolds (e.g. a breakthrough Gen6 lineage).
+        """
         node_id = ray.get_runtime_context().get_node_id()[:8]
         gen_label = population[0].get('generation', '?') if population else '?'
         self._report_activity(
@@ -109,6 +131,10 @@ class ExplorerAgent:
         )
         self._emit_event("generation", f"Generated {count} candidates from Gen {gen_label} elite pool")
 
+        # Build fast lookup for seeded elites
+        seed_set = set(elite_seed_ids or [])
+        seed_pool = [m for m in population if m.get("id", "") in seed_set] or []
+
         molecules = []
         attempts = 0
         max_attempts = count * 20
@@ -117,16 +143,21 @@ class ExplorerAgent:
             attempts += 1
             r_val = random.random()
 
-            if r_val < crossover_rate and len(population) >= 2:
-                # Crossover: combine two parents
+            # Boost crossover for seeded elites: 20% extra chance when seed pool exists
+            use_seed_crossover = seed_pool and r_val < 0.20
+
+            if use_seed_crossover:
+                seed_parent = random.choice(seed_pool)
+                other = random.choice(population)
+                child_selfies = self._crossover(seed_parent["selfies"], other["selfies"])
+                self._emit_event("scaffold", f"Seeded crossover — preserving elite lineage {seed_parent['id'][:8]}")
+            elif r_val < crossover_rate and len(population) >= 2:
                 p1, p2 = random.sample(population, 2)
                 child_selfies = self._crossover(p1["selfies"], p2["selfies"])
             elif r_val < crossover_rate + mutation_rate and population:
-                # Mutation: modify a parent
                 parent = random.choice(population)
                 child_selfies = self._mutate(parent["selfies"])
             else:
-                # Fresh random
                 length = random.randint(5, 25)
                 tokens = [random.choice(COMMON_TOKENS) for _ in range(length)]
                 child_selfies = "".join(tokens)
@@ -192,10 +223,27 @@ class ExplorerAgent:
             if not atom_nums.issubset(ALLOWED_ATOMIC_NUMS):
                 return None
 
-            # Reject formally charged molecules — they score well but aren't drug-like
+            # Reject formally charged molecules — they score well heuristically but aren't drug-like
             total_charge = sum(a.GetFormalCharge() for a in mol.GetAtoms())
             if total_charge != 0:
                 return None
+
+            # Must contain at least one carbon
+            if not any(a.GetAtomicNum() == 6 for a in mol.GetAtoms()):
+                return None
+
+            # Cap phosphorus atoms — >2 P atoms is a red flag for synthetically unrealistic structures
+            p_count = sum(1 for a in mol.GetAtoms() if a.GetAtomicNum() == 15)
+            if p_count > 2:
+                return None
+
+            # Reject C#P triple bonds (chemically exotic, not drug-like)
+            from rdkit.Chem import rdMolDescriptors
+            for bond in mol.GetBonds():
+                if bond.GetBondTypeAsDouble() == 3.0:
+                    a1, a2 = bond.GetBeginAtom().GetAtomicNum(), bond.GetEndAtom().GetAtomicNum()
+                    if 15 in (a1, a2):  # triple bond to phosphorus
+                        return None
 
             canonical_smiles = Chem.MolToSmiles(mol)
 

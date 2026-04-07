@@ -13,7 +13,11 @@ def compute_morgan_fingerprint(smiles: str, radius: int = 2, n_bits: int = 1024)
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return np.zeros(n_bits)
-    fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius, nBits=n_bits)
+    try:
+        from rdkit.Chem.rdMolDescriptors import GetMorganFingerprintAsBitVect
+        fp = GetMorganFingerprintAsBitVect(mol, radius, nBits=n_bits)
+    except ImportError:
+        fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius, nBits=n_bits)
     return np.array(fp)
 
 

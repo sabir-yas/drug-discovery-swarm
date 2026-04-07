@@ -10,9 +10,9 @@ interface AgentEvent {
 }
 
 const AGENT_CONFIG: Record<string, { color: string; label: string; tag: string }> = {
-  ExplorerAgent: { color: '#adc6ff', label: 'Explorer', tag: 'EXP' },
-  ChemistAgent:  { color: '#4edea3', label: 'Chemist',  tag: 'CHM' },
-  SafetyAgent:   { color: '#fbbf24', label: 'Safety',   tag: 'SAF' },
+  ExplorerAgent: { color: '#00e3fd', label: 'Explorer', tag: 'EXP' },
+  ChemistAgent:  { color: '#a1ffc2', label: 'Chemist',  tag: 'CHM' },
+  SafetyAgent:   { color: '#ffc563', label: 'Safety',   tag: 'SAF' },
   SelectorAgent: { color: '#c4b5fd', label: 'Selector', tag: 'SEL' },
 };
 
@@ -28,8 +28,8 @@ export function AgentChatLog({ events }: { events: AgentEvent[] }) {
   return (
     <div
       ref={scrollRef}
-      className="h-full overflow-y-auto px-3 py-2 space-y-1"
-      style={{ background: '#09090f', scrollBehavior: 'smooth' }}
+      className="h-full overflow-y-auto py-1"
+      style={{ background: 'transparent', scrollBehavior: 'smooth' }}
     >
       {events.length === 0 && (
         <div className="text-center mt-8 text-[11px] tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.18)' }}>
@@ -47,8 +47,8 @@ export function AgentChatLog({ events }: { events: AgentEvent[] }) {
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.15 }}
-              className="flex items-start gap-2 py-1.5 px-2 rounded-lg"
-              style={{ background: 'rgba(255,255,255,0.02)' }}
+              className="flex items-start gap-2 py-1 px-3"
+              style={{ background: 'transparent' }}
             >
               {/* Tag */}
               <span

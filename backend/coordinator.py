@@ -112,12 +112,40 @@ class SwarmCoordinator:
         except:
             return []
 
-    async def run(self) -> AsyncGenerator[dict, None]:
-        """Run the evolutionary swarm loop, yielding results each generation."""
+    async def run(
+        self,
+        run_id: str = None,
+        target_context: dict = None,
+        max_generations: int = None,
+    ) -> AsyncGenerator[dict, None]:
+        """Run the evolutionary swarm loop, yielding results each generation.
+
+        Args:
+            run_id: Optional A2A run ID. If set, run state is written to Redis run_store.
+            target_context: Optional dict with keys 'target_resolved', 'disease_context',
+                            and 'scoring_bias' (overrides default fitness weights).
+            max_generations: Override MAX_GENERATIONS for this run (used by A2A submissions).
+        """
         self.is_running = True
         population = []
 
-        for gen in range(MAX_GENERATIONS):
+        # Extract per-run scoring bias from target_context (A2A path)
+        scoring_bias: dict = {}
+        if target_context and target_context.get("scoring_bias"):
+            scoring_bias = target_context["scoring_bias"]
+
+        # Import run_store lazily to avoid circular import issues
+        if run_id:
+            try:
+                from a2a import run_store as _run_store
+            except ImportError:
+                _run_store = None
+        else:
+            _run_store = None
+
+        generations = max_generations if max_generations is not None else MAX_GENERATIONS
+
+        for gen in range(generations):
             if not self.is_running:
                 break
             while self.is_paused:
@@ -137,12 +165,15 @@ class SwarmCoordinator:
                     for explorer in self.explorers
                 ]
             else:
+                # Pass the top-1 ID as elite seed to bias crossover toward the best lineage
+                elite_seed_ids = [population[0]["id"]] if population else []
                 mol_futures = [
                     explorer.generate_evolved.remote(
                         population,
                         MOLECULES_PER_GENERATION // NUM_EXPLORER_AGENTS,
                         MUTATION_RATE,
                         CROSSOVER_RATE,
+                        elite_seed_ids,
                     )
                     for explorer in self.explorers
                 ]
@@ -183,7 +214,7 @@ class SwarmCoordinator:
 
             # === PHASE 3: Safety Agents ===
             safety_futures = [
-                agent.check_toxicity.remote(scored[i::NUM_SAFETY_AGENTS])
+                agent.check_toxicity.remote(scored[i::NUM_SAFETY_AGENTS], **scoring_bias)
                 for i, agent in enumerate(self.safety_agents)
             ]
             safe_batches = await asyncio.gather(*[asyncio.wrap_future(f.future()) for f in safety_futures])
@@ -252,6 +283,8 @@ class SwarmCoordinator:
                         "binding_score": m["binding_score"],
                         "drug_likeness": m["drug_likeness"],
                         "toxicity_flag": m["toxicity_flag"],
+                        "sa_score": m.get("sa_score"),
+                        "vina_affinity_kcal": m.get("vina_affinity_kcal"),
                         "umap_x": m.get("umap_x", 0),
                         "umap_y": m.get("umap_y", 0),
                         "umap_z": m.get("umap_z", 0),
@@ -264,6 +297,51 @@ class SwarmCoordinator:
                 "cluster_activity": self.get_cluster_activity(),
                 "agent_events": self._get_agent_events(),
             }
+
+            # Emit A2A run state update if this is a named run
+            if run_id and _run_store:
+                best = population[0]["fitness"] if population else 0.0
+                target_label = target_context.get("target_resolved") if target_context else None
+                _run_store.update_run(run_id, gen, best, target_label)
+
+        # Run finished — persist final results for A2A callers
+        if run_id and _run_store:
+            from a2a.fhir_output import build_medication_request_bundle
+            from a2a.models import CandidateMolecule
+
+            patient_fhir_id = target_context.get("patient_fhir_id", "") if target_context else ""
+            target_protein = target_context.get("target_resolved", "") if target_context else ""
+            disease_context = target_context.get("disease_context", "") if target_context else ""
+            current_meds = target_context.get("current_medications", []) if target_context else []
+
+            candidates = [
+                CandidateMolecule(
+                    rank=i + 1,
+                    id=m.get("id", ""),
+                    smiles=m.get("smiles", ""),
+                    fitness=m.get("fitness", 0.0),
+                    binding_score=m.get("binding_score", 0.0),
+                    drug_likeness=m.get("drug_likeness", 0.0),
+                    toxicity_flag=m.get("toxicity_flag", False),
+                    generation_found=m.get("generation", 0),
+                )
+                for i, m in enumerate(self.leaderboard[:10])
+            ]
+
+            fhir_bundle = build_medication_request_bundle(
+                patient_fhir_id=patient_fhir_id,
+                run_id=run_id,
+                target_protein=target_protein,
+                disease_context=disease_context,
+                top_candidates=candidates,
+                current_medications=current_meds,
+            )
+            _run_store.complete_run(
+                run_id,
+                self.leaderboard,
+                disease_context=disease_context,
+                fhir_bundle=fhir_bundle,
+            )
 
     def pause(self):
         self.is_paused = True

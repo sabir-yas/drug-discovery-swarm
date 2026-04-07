@@ -22,47 +22,49 @@ interface Props {
 
 export function FitnessTimeline({ data }: Props) {
   return (
-    <div className="w-full h-full p-4 flex flex-col" style={{ background: '#09090f' }}>
-      <div className="text-xs font-semibold tracking-widest uppercase mb-3 whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.35)' }}>
+    <div className="w-full h-full px-4 pt-4 pb-2 flex flex-col" style={{ background: 'transparent' }}>
+      <div className="text-[10px] font-semibold tracking-[0.18em] uppercase mb-3 whitespace-nowrap"
+        style={{ color: 'rgba(232,234,240,0.38)', fontFamily: "'Inter', sans-serif" }}>
         Fitness Timeline
       </div>
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-            <XAxis 
-              dataKey="generation" 
-              stroke="rgba(255,255,255,0.4)" 
-              tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 12 }} 
+          <LineChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="2 4" stroke="rgba(232,234,240,0.06)" />
+            <XAxis
+              dataKey="generation"
+              stroke="rgba(232,234,240,0.15)"
+              tick={{ fill: 'rgba(232,234,240,0.3)', fontSize: 10, fontFamily: 'JetBrains Mono' }}
               domain={['dataMin', 'dataMax']}
             />
-            <YAxis 
-              stroke="rgba(255,255,255,0.4)" 
-              tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 12 }}
+            <YAxis
+              stroke="rgba(232,234,240,0.15)"
+              tick={{ fill: 'rgba(232,234,240,0.3)', fontSize: 10, fontFamily: 'JetBrains Mono' }}
               domain={[0, 1]}
             />
-            <Tooltip 
-              contentStyle={{ backgroundColor: '#161622', borderColor: 'rgba(255,255,255,0.1)' }}
-              itemStyle={{ color: '#fff' }}
+            <Tooltip
+              contentStyle={{ backgroundColor: '#141820', border: 'none', borderRadius: '8px', fontSize: 11 }}
+              itemStyle={{ color: '#e8eaf0' }}
+              labelStyle={{ color: 'rgba(232,234,240,0.5)', marginBottom: 4 }}
             />
-            <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-            <Line 
-              type="monotone" 
-              dataKey="best_fitness" 
-              name="Best Fitness"
-              stroke="#4edea3"
+            <Line
+              type="monotone"
+              dataKey="best_fitness"
+              name="Best"
+              stroke="#a1ffc2"
               strokeWidth={2}
               dot={false}
-              animationDuration={500}
+              animationDuration={400}
             />
-            <Line 
-              type="monotone" 
-              dataKey="avg_fitness" 
-              name="Avg Fitness"
-              stroke="#adc6ff"
-              strokeWidth={2}
+            <Line
+              type="monotone"
+              dataKey="avg_fitness"
+              name="Avg"
+              stroke="#00e3fd"
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
               dot={false}
-              animationDuration={500}
+              animationDuration={400}
             />
           </LineChart>
         </ResponsiveContainer>

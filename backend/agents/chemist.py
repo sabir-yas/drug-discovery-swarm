@@ -79,10 +79,27 @@ class ChemistAgent:
             hba > 10,
         ])
         veber_ok = tpsa <= 140 and rot <= 10
-        drug_likeness = (
+        lipinski_veber = (
             (4 - lipinski_violations) / 4.0 * 0.7
             + (1.0 if veber_ok else 0.0) * 0.3
         )
+
+        # SA score: 1 (easy to synthesize) → 10 (very hard). Normalize to 0–1 penalty.
+        try:
+            from rdkit.Chem import RDConfig
+            import sys, os
+            sa_path = os.path.join(RDConfig.RDContribDir, 'SA_Score')
+            if sa_path not in sys.path:
+                sys.path.insert(0, sa_path)
+            import sascorer
+            sa = sascorer.calculateScore(mol)
+            # sa in [1,10]: 1=good, 10=bad. Map to 0–1 (1=easy→1.0, 10=hard→0.0)
+            sa_score = max(0.0, 1.0 - (sa - 1.0) / 9.0)
+        except Exception:
+            sa_score = 0.5  # neutral if SA scorer unavailable
+
+        # Weight: 60% Lipinski/Veber, 40% synthetic accessibility
+        drug_likeness = lipinski_veber * 0.6 + sa_score * 0.4
 
         return round(binding, 4), round(drug_likeness, 4)
 
@@ -116,6 +133,17 @@ class ChemistAgent:
 
                 _, drug_likeness = self._heuristic_binding(mol)
                 mol_data["drug_likeness"] = drug_likeness
+                # Store SA score separately for frontend display
+                try:
+                    from rdkit.Chem import RDConfig
+                    import sys, os
+                    sa_path = os.path.join(RDConfig.RDContribDir, 'SA_Score')
+                    if sa_path not in sys.path:
+                        sys.path.insert(0, sa_path)
+                    import sascorer
+                    mol_data["sa_score"] = round(sascorer.calculateScore(mol), 2)
+                except Exception:
+                    mol_data["sa_score"] = None
 
                 if dock_fn is not None:
                     result = dock_fn(mol_data["smiles"], exhaustiveness=DOCKING_EXHAUSTIVENESS)

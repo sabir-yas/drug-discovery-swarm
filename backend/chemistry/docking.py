@@ -26,17 +26,57 @@ MPRO_BOX_SIZE = [20, 20, 20]
 
 
 def _prepare_ligand_pdbqt(mol) -> str | None:
-    """Convert an RDKit mol with 3D conformer to PDBQT using meeko."""
+    """Convert an RDKit mol with 3D conformer to PDBQT using meeko.
+    Supports both meeko >= 0.5 (new API) and older versions.
+    """
     try:
         from meeko import MoleculePreparation
         preparator = MoleculePreparation()
-        preparator.prepare(mol)
+
+        # meeko >= 0.5: prepare() returns a list of MoleculeSetup instances
+        setups = preparator.prepare(mol)
+        if setups:
+            from meeko import PDBQTWriterLegacy
+            pdbqt_string, is_ok, error_msg = PDBQTWriterLegacy.write_string(setups[0])
+            if not is_ok:
+                return None
+            return pdbqt_string
+
+        # meeko < 0.5 fallback
         pdbqt_string, is_ok, error_msg = preparator.write_pdbqt_string()
         if not is_ok:
             return None
         return pdbqt_string
-    except Exception:
+    except Exception as e:
         return None
+
+
+def _is_dockable(smiles: str) -> bool:
+    """
+    Quick pre-check: can meeko prepare this molecule for Vina?
+    Filters out charged, radical, or otherwise problematic structures
+    before spending time on conformer generation.
+    """
+    try:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            return False
+        # Reject any formal charge
+        if sum(a.GetFormalCharge() for a in mol.GetAtoms()) != 0:
+            return False
+        # Reject radicals
+        if sum(a.GetNumRadicalElectrons() for a in mol.GetAtoms()) != 0:
+            return False
+        # Reject atoms meeko can't type: only C, N, O, F, S, Cl, Br, I, P allowed
+        allowed = {6, 7, 8, 9, 15, 16, 17, 35, 53}
+        if not {a.GetAtomicNum() for a in mol.GetAtoms()}.issubset(allowed):
+            return False
+        # Must have at least one carbon
+        if not any(a.GetAtomicNum() == 6 for a in mol.GetAtoms()):
+            return False
+        return True
+    except Exception:
+        return False
 
 
 def receptor_ready() -> bool:
@@ -57,6 +97,9 @@ def dock_smiles(smiles: str, exhaustiveness: int = 4) -> float | None:
         None if receptor not found, conformer fails, or docking errors
     """
     if not receptor_ready():
+        return None
+
+    if not _is_dockable(smiles):
         return None
 
     try:

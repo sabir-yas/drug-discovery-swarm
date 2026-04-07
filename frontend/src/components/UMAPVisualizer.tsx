@@ -85,22 +85,30 @@ export function UMAPVisualizer({ molecules, onSelect }: Props) {
   };
 
   return (
-    <div ref={containerRef} className="w-full h-full bg-[#050508] relative">
-      <div className="absolute top-4 left-4 z-10 font-medium text-white/80 pointer-events-none">
-        Chemical Space (UMAP)
-        <div className="text-xs text-white/40 mt-1">{molecules.length} molecules explored</div>
+    <div ref={containerRef} className="w-full h-full relative" style={{ background: '#06080d' }}>
+      {/* Top-left label */}
+      <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 10, pointerEvents: 'none' }}>
+        <div style={{ fontSize: 9, letterSpacing: '0.18em', color: 'rgba(232,234,240,0.3)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>
+          Chemical Space
+        </div>
+        <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif", color: '#e8eaf0', lineHeight: 1, letterSpacing: '-0.02em' }}>
+          {molecules.length.toLocaleString()}
+        </div>
+        <div style={{ fontSize: 9, color: 'rgba(232,234,240,0.25)', marginTop: 1 }}>molecules explored</div>
       </div>
 
       {/* Hover tooltip */}
       {tooltip && (
-        <div
-          className="absolute z-20 pointer-events-none bg-[#161622]/90 border border-white/10 rounded px-2 py-1.5 text-xs"
-          style={{ left: tooltip.x + 12, top: tooltip.y - 40 }}
-        >
-          <div className="font-mono text-white">{tooltip.mol.id}</div>
-          <div className="text-emerald-400">fitness: {tooltip.mol.fitness.toFixed(3)}</div>
-          <div className="text-white/40">gen {tooltip.mol.generation}</div>
-          <div className="text-white/30 mt-0.5">click to view 3D</div>
+        <div style={{
+          position: 'absolute', zIndex: 30, pointerEvents: 'none',
+          left: tooltip.x + 14, top: tooltip.y - 60,
+          background: 'rgba(16,19,26,0.95)', backdropFilter: 'blur(8px)',
+          border: '1px solid rgba(161,255,194,0.15)', borderRadius: 8,
+          padding: '7px 10px', fontSize: 10,
+        }}>
+          <div style={{ fontFamily: "'JetBrains Mono',monospace", color: '#e8eaf0', marginBottom: 3 }}>{tooltip.mol.id}</div>
+          <div style={{ color: '#a1ffc2', fontFamily: "'JetBrains Mono',monospace" }}>fitness {tooltip.mol.fitness.toFixed(3)}</div>
+          <div style={{ color: 'rgba(232,234,240,0.4)', marginTop: 1 }}>gen {tooltip.mol.generation} · click for 3D</div>
         </div>
       )}
 

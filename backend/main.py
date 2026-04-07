@@ -5,12 +5,18 @@ Run: uvicorn main:app --host 0.0.0.0 --port 8000
 
 import asyncio
 import json
+from pathlib import Path
 from typing import List
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from coordinator import SwarmCoordinator
+from a2a_router import router as a2a_router
 
 app = FastAPI(title="Drug Discovery Swarm")
+
+# Mount A2A router
+app.include_router(a2a_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -94,6 +100,13 @@ async def export_leaderboard():
     with open(path, "w") as f:
         _json.dump(lb, f, indent=2)
     return {"saved": path, "count": len(lb)}
+
+@app.get("/.well-known/agent.json")
+async def agent_card():
+    """Serve the A2A agent card for Prompt Opinion discovery."""
+    card_path = Path(__file__).parent / "a2a" / "agent_card.json"
+    return JSONResponse(content=json.loads(card_path.read_text()))
+
 
 if __name__ == "__main__":
     import uvicorn

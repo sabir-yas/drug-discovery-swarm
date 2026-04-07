@@ -20,6 +20,10 @@ services:
           property: connectionString
       - key: PYTHONNOUSERSITE
         value: "1"
+      - key: ANTHROPIC_API_KEY
+        sync: false   # Set this manually in Render dashboard
+      - key: FHIR_MOCK
+        value: "false"
     plan: free
 
   # ── Frontend ─────────────────────────────────────────────────────────

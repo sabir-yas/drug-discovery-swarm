@@ -5,16 +5,34 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Drug Discovery Swarm</title>
-    <!-- Google Fonts Inter -->
+    <!-- Fonts: Space Grotesk (headings) + Inter (body) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
     <!-- 3Dmol.js Library -->
     <script src="https://unpkg.com/3dmol/build/3Dmol-min.js"></script>
-    
+
     <style>
-      html, body, #root { width: 100vw; height: 100vh; margin: 0; padding: 0; background: #0a0a0f; }
+      :root {
+        --bg:        #0c0e12;
+        --surface:   #10131a;
+        --surface2:  #141820;
+        --primary:   #a1ffc2;
+        --cyan:      #00e3fd;
+        --amber:     #ffc563;
+        --text:      #e8eaf0;
+        --muted:     rgba(232,234,240,0.38);
+        --dim:       rgba(232,234,240,0.14);
+      }
+      html, body, #root {
+        width: 100vw; height: 100vh; margin: 0; padding: 0;
+        background: var(--bg);
+        font-family: 'Inter', sans-serif;
+      }
+      .font-display { font-family: 'Space Grotesk', sans-serif; }
+      .font-mono    { font-family: 'JetBrains Mono', monospace !important; }
+      @keyframes spin { to { transform: rotate(360deg); } }
     </style>
   </head>
   <body>

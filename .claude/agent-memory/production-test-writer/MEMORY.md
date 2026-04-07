@@ -1,0 +1,1 @@
+- [project_test_infra.md](project_test_infra.md) — A2A layer test setup: frameworks, env split (rdkit/conda), mocking patterns, run commands

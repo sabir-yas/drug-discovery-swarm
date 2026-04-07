@@ -44,7 +44,13 @@ class SafetyAgent:
             "timestamp": time.time(),
         }, maxlen=200)
 
-    def check_toxicity(self, molecules: list) -> list:
+    def check_toxicity(
+        self,
+        molecules: list,
+        binding_weight: float = None,
+        drug_likeness_weight: float = None,
+        toxicity_penalty_weight: float = None,
+    ) -> list:
         node_id = ray.get_runtime_context().get_node_id()[:8]
         self._report_activity(node_id, "checking", f"Screening {len(molecules)} molecules for toxicity")
 
@@ -64,6 +70,8 @@ class SafetyAgent:
                     "C(=O)Cl",           # acyl chloride
                     "[N;H0](=O)",        # nitroso
                     "C1(=O)OC(=O)C1",   # anhydride
+                    "[N][N][O][P][Cl]",  # diazo-phosphorochloride (reactive warhead)
+                    "[C]#[S]",           # thioalkyne (chemically exotic)
                 ]
                 has_toxic_group = any(
                     mol.HasSubstructMatch(Chem.MolFromSmarts(s))
@@ -79,11 +87,14 @@ class SafetyAgent:
                     alerts_found += 1
 
                 from config import BINDING_WEIGHT, DRUG_LIKENESS_WEIGHT, TOXICITY_PENALTY_WEIGHT
+                bw = binding_weight if binding_weight is not None else BINDING_WEIGHT
+                dlw = drug_likeness_weight if drug_likeness_weight is not None else DRUG_LIKENESS_WEIGHT
+                tpw = toxicity_penalty_weight if toxicity_penalty_weight is not None else TOXICITY_PENALTY_WEIGHT
                 toxicity_penalty = 0.5 if mol_data["toxicity_flag"] else 0.0
                 mol_data["fitness"] = round(
-                    BINDING_WEIGHT * mol_data["binding_score"]
-                    + DRUG_LIKENESS_WEIGHT * mol_data["drug_likeness"]
-                    - TOXICITY_PENALTY_WEIGHT * toxicity_penalty,
+                    bw * mol_data["binding_score"]
+                    + dlw * mol_data["drug_likeness"]
+                    - tpw * toxicity_penalty,
                     4,
                 )
 
@@ -91,9 +102,11 @@ class SafetyAgent:
             except Exception:
                 continue
 
+        safe_count = len(results) - alerts_found
+        pass_rate = round(safe_count / len(results) * 100, 1) if results else 0
         if alerts_found > 0:
-            self._emit_event("alert", f"Flagged {alerts_found} toxic alerts in batch of {len(molecules)}")
+            self._emit_event("alert", f"Flagged {alerts_found}/{len(results)} — {pass_rate}% safe pass rate")
         else:
-            self._emit_event("cleared", f"Batch of {len(molecules)} molecules passed safety screening")
+            self._emit_event("cleared", f"Batch cleared — {pass_rate}% safe pass rate ({safe_count}/{len(results)})")
 
         return results

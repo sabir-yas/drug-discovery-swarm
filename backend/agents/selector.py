@@ -89,12 +89,14 @@ class SelectorAgent:
             for candidate in tournament:
                 fp = fps.get(candidate["id"])
                 if fp and selected_fps:
-                    # Penalise molecules too similar to already-selected ones
                     max_sim = max(DataStructs.TanimotoSimilarity(fp, sfp) for sfp in selected_fps)
-                    diversity_bonus = (1.0 - max_sim) * 0.15
+                    diversity_bonus = 0.05 if max_sim < 0.4 else (1.0 - max_sim) * 0.15
                 else:
                     diversity_bonus = 0.0
-                score = candidate["fitness"] + diversity_bonus
+                # SA penalty: score above 7.0 hurts fitness to discourage unsynthesizable elites
+                sa = candidate.get("sa_score")
+                sa_penalty = max(0.0, (sa - 7.0) * 0.05) if sa is not None else 0.0
+                score = candidate["fitness"] + diversity_bonus - sa_penalty
                 if score > best_score:
                     best_score = score
                     best = candidate

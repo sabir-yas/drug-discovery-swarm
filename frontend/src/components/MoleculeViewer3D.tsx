@@ -45,29 +45,27 @@ export function MoleculeViewer3D({ sdfData, loading }: Props) {
   return (
     <div className="w-full h-full relative" style={{ minHeight: '200px' }}>
       {/* Header */}
-      <div className="absolute top-3 left-4 z-10 text-xs font-semibold tracking-widest uppercase pointer-events-none"
-           style={{ color: 'rgba(255,255,255,0.35)' }}>
-        3D Structure
+      <div style={{ position: 'absolute', top: 10, left: 12, zIndex: 10, pointerEvents: 'none' }}>
+        <div style={{ fontSize: 8, letterSpacing: '0.16em', color: 'rgba(232,234,240,0.3)', fontWeight: 600, textTransform: 'uppercase' }}>
+          3D Structure
+        </div>
       </div>
 
-      {/* Loading spinner */}
+      {/* Loading */}
       {loading && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-10"
-             style={{ background: '#09090f' }}>
-          <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin mb-2"
-               style={{ borderColor: '#4edea3', borderTopColor: 'transparent' }} />
-          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
-            Computing conformer...
-          </span>
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10, background: 'rgba(12,14,18,0.85)' }}>
+          <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #a1ffc2', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite', marginBottom: 8 }} />
+          <span style={{ fontSize: 9, color: 'rgba(232,234,240,0.3)', letterSpacing: '0.1em' }}>Computing…</span>
         </div>
       )}
 
-      {/* Empty state */}
+      {/* Empty */}
       {!sdfData && !loading && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.18)' }}>
-            Select a candidate to view 3D structure
-          </span>
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', gap: 6 }}>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(161,255,194,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'rgba(161,255,194,0.25)' }} />
+          </div>
+          <span style={{ fontSize: 9, color: 'rgba(232,234,240,0.2)', letterSpacing: '0.08em' }}>Select a molecule</span>
         </div>
       )}
 
