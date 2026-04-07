@@ -354,4 +354,4 @@ npm run dev -- --mode hpc
 - **Population convergence** — the swarm can converge to a dominant scaffold by generation ~20–30. The diversity-aware tournament selector (Tanimoto < 0.4 threshold) and elite-seeded crossover mitigate but don't eliminate this.
 - **No persistent storage** — molecules are in-memory only. Use `/api/leaderboard/export` before stopping, or use the A2A endpoint which persists results in Redis for 24h.
 
-  Contributors: Yasser Sabir, Khurshed Badalov and Jovan Rayhaga
+  Contributors: Yasser Sabir, Khurshed Badalov and Jovan Rayhaga.
